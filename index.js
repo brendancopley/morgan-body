@@ -368,7 +368,7 @@ module.exports = function morganBody(app, options) {
         this.__morgan_body_response = body;
       };
 
-      app.use(morgan(logBodyGen('Response', (req, res) => res.__morgan_body_response), req, res, morganOptions));
+      app.use(morgan(logBodyGen('Response', (req, res) => res.__morgan_body_response, req, res), morganOptions));
     }
   }
 
