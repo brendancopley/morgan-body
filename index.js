@@ -131,12 +131,27 @@ function shallowClone(obj) {
   return newObj;
 }
 
-function bodyToString(maxBodyLength, prettify, prependStr, body, bodyActionColor, bodyColor, defaultColor, filterParameters) {
+function bodyToString(maxBodyLength, prettify, prependStr, body, bodyActionColor, bodyColor, defaultColor, filterParameters, req, res) {
   if (!body) {
     return null; // must return "null" to avoid morgan logging blank line
   }
 
-  var finalStr = '';
+  const request = req;
+  const response = res;
+
+  const standardHeaders = {
+    method: request.method,
+    url: req.url,
+    params: response.req.params,
+    query: response.req.query,
+    status: res.statusCode,
+    host: req.headers.host,
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    request_body: request.body,
+  };
+
+  var finalStr = JSON.stringify(standardHeaders);
 
   var bodyType = typeof body;
   var isObj = body !== null && bodyType === 'object';
@@ -328,7 +343,7 @@ module.exports = function morganBody(app, options) {
   app.use(morgan(morganReqFormatName, morganOptions));
 
   if (logRequestBody || logResponseBody) {
-    function logBodyGen(prependStr, getBodyFunc) {
+    function logBodyGen(prependStr, getBodyFunc, req, res) {
       var bodyFormatName = 'bodyFmt_' + prependStr + morganBodyUseCounter;
       morgan.format(bodyFormatName, function logBody(_, req, res) {
         let exPrependStr = prependStr;
@@ -336,13 +351,13 @@ module.exports = function morganBody(app, options) {
           const IDToken = getIDToken(req);
           exPrependStr = '[' + (IDToken === undefined ? '-' : IDToken) + '] ' + prependStr;
         }
-        return bodyToString(maxBodyLength, prettify, exPrependStr, getBodyFunc(req, res), bodyActionColor, bodyColor, defaultColor, filterParameters);
+        return bodyToString(maxBodyLength, prettify, exPrependStr, getBodyFunc(req, res), bodyActionColor, bodyColor, defaultColor, filterParameters, req, res);
       });
       return bodyFormatName;
     }
 
     if (logRequestBody) {
-      app.use(morgan(logBodyGen('Request', req => req.body), morganOptions));
+      app.use(morgan(logBodyGen('Request', req => req.body, req, res), morganOptions));
     }
 
     if (logResponseBody) {
@@ -353,7 +368,7 @@ module.exports = function morganBody(app, options) {
         this.__morgan_body_response = body;
       };
 
-      app.use(morgan(logBodyGen('Response', (req, res) => res.__morgan_body_response), morganOptions));
+      app.use(morgan(logBodyGen('Response', (req, res) => res.__morgan_body_response), req, res, morganOptions));
     }
   }
 
