@@ -151,7 +151,7 @@ function bodyToString(maxBodyLength, prettify, prependStr, body, bodyActionColor
     request_body: request.body,
   };
 
-  var finalStr = JSON.stringify(standardHeaders);
+  var finalStr = `${standardHeaders}`;
 
   var bodyType = typeof body;
   var isObj = body !== null && bodyType === 'object';
