@@ -63,17 +63,17 @@ function getThemeObj(themeName) {
 
   // convenience function for altering colors via algorithm
   var skewDefaults = func =>
-    Object.keys(themes.defaultTheme).reduce((prev, curr) => {
-      const currentThemeColor = themes.defaultTheme[curr];
-      const [, ansiNumbers] = colorDigitsMatcher.exec(currentThemeColor);
-      if (ansiNumbers.length === 1) { // don't want to mess with unsetString
-        prev[curr] = currentThemeColor;
-      } else {
-        const [typeNumber, colorNumber] = ansiNumbers.split('');
-        prev[curr] = `\x1b[${func({typeNumber: +typeNumber, colorNumber: +colorNumber})}m`;
-      }
-      return prev;
-    }, {});
+      Object.keys(themes.defaultTheme).reduce((prev, curr) => {
+        const currentThemeColor = themes.defaultTheme[curr];
+        const [, ansiNumbers] = colorDigitsMatcher.exec(currentThemeColor);
+        if (ansiNumbers.length === 1) { // don't want to mess with unsetString
+          prev[curr] = currentThemeColor;
+        } else {
+          const [typeNumber, colorNumber] = ansiNumbers.split('');
+          prev[curr] = `\x1b[${func({typeNumber: +typeNumber, colorNumber: +colorNumber})}m`;
+        }
+        return prev;
+      }, {});
 
   // reverse all colors
   themes.inverted = skewDefaults(({ typeNumber, colorNumber }) => `${typeNumber}${7 - colorNumber}`);
@@ -131,27 +131,12 @@ function shallowClone(obj) {
   return newObj;
 }
 
-function bodyToString(maxBodyLength, prettify, prependStr, body, bodyActionColor, bodyColor, defaultColor, filterParameters, req, res) {
+function bodyToString(maxBodyLength, prettify, prependStr, body, bodyActionColor, bodyColor, defaultColor, filterParameters) {
   if (!body) {
     return null; // must return "null" to avoid morgan logging blank line
   }
 
-  const request = req;
-  const response = res;
-
-  const standardHeaders = {
-    method: request.method,
-    url: req.url,
-    params: response.req.params,
-    query: response.req.query,
-    status: res.statusCode,
-    host: req.headers.host,
-    origin: req.headers.origin,
-    referer: req.headers.referer,
-    request_body: request.body,
-  };
-
-  var finalStr = `${standardHeaders}`;
+  var finalStr = '';
 
   var bodyType = typeof body;
   var isObj = body !== null && bodyType === 'object';
@@ -267,7 +252,7 @@ module.exports = function morganBody(app, options) {
     morganOptions.skip = options.skip;
   }
   if (options.hasOwnProperty('logIP')) {
-      morganOptions.logIP = options.logIP
+    morganOptions.logIP = options.logIP
   }
 
   morganOptions.prettify = prettify; // needs to be passed to modify output stream separator
@@ -343,7 +328,7 @@ module.exports = function morganBody(app, options) {
   app.use(morgan(morganReqFormatName, morganOptions));
 
   if (logRequestBody || logResponseBody) {
-    function logBodyGen(prependStr, getBodyFunc, req, res) {
+    function logBodyGen(prependStr, getBodyFunc) {
       var bodyFormatName = 'bodyFmt_' + prependStr + morganBodyUseCounter;
       morgan.format(bodyFormatName, function logBody(_, req, res) {
         let exPrependStr = prependStr;
@@ -351,13 +336,32 @@ module.exports = function morganBody(app, options) {
           const IDToken = getIDToken(req);
           exPrependStr = '[' + (IDToken === undefined ? '-' : IDToken) + '] ' + prependStr;
         }
-        return bodyToString(maxBodyLength, prettify, exPrependStr, getBodyFunc(req, res), bodyActionColor, bodyColor, defaultColor, filterParameters, req, res);
+        var prefixString = 'Headers: ';
+        if (req && res) {
+          var response = res;
+          var request = response.req;
+
+          var standardHeaders = {
+            method: request.method,
+            url: req.url,
+            params: request.params,
+            query: request.query,
+            status: res.statusCode,
+            host: req.headers.host,
+            origin: req.headers.origin,
+            referer: req.headers.referer,
+            request_body: request.body,
+          };
+          prefixString += JSON.stringify(standardHeaders);
+        }
+        exPrependStr = `${exPrependStr}  | ${prefixString}`;
+        return bodyToString(maxBodyLength, prettify, exPrependStr, getBodyFunc(req, res), bodyActionColor, bodyColor, defaultColor, filterParameters);
       });
       return bodyFormatName;
     }
 
     if (logRequestBody) {
-      app.use(morgan(logBodyGen('Request', req => req.body, req, res), morganOptions));
+      app.use(morgan(logBodyGen('Request', req => req.body), morganOptions));
     }
 
     if (logResponseBody) {
@@ -368,7 +372,9 @@ module.exports = function morganBody(app, options) {
         this.__morgan_body_response = body;
       };
 
-      app.use(morgan(logBodyGen('Response', (req, res) => res.__morgan_body_response, req, res), morganOptions));
+      app.use(morgan(logBodyGen('Response', (req, res) => {
+        return res.__morgan_body_response;
+      }), morganOptions));
     }
   }
 
@@ -378,17 +384,17 @@ module.exports = function morganBody(app, options) {
   morgan.format(morganResFormatName, function developmentFormatLine(tokens, req, res) {
     // get the status code if response written
     var status = res._header
-      ? res.statusCode
-      : undefined;
+        ? res.statusCode
+        : undefined;
 
     // get status color
     var statusColor = theme === 'noColorsTheme' ? defaultColor
-      : status >= 500 ? status500
-      : status >= 400 ? status400
-      : status >= 300 ? status300
-      : status >= 200 ? status200
-      : status >= 100 ? status100
-      : defaultColor;
+        : status >= 500 ? status500
+            : status >= 400 ? status400
+                : status >= 300 ? status300
+                    : status >= 200 ? status200
+                        : status >= 100 ? status100
+                            : defaultColor;
 
     // get cached status-colored function
     var fn = developmentFormatLine[statusColor];
@@ -463,8 +469,8 @@ function morgan(format, opts) {
 
   // format function
   var formatLine = typeof fmt !== 'function'
-    ? getFormatFunction(fmt)
-    : fmt;
+      ? getFormatFunction(fmt)
+      : fmt;
 
   // stream
   var buffer = opts.buffer;
@@ -475,8 +481,8 @@ function morgan(format, opts) {
 
     // flush interval
     var interval = typeof buffer !== 'number'
-      ? defaultBufferDuration
-      : buffer;
+        ? defaultBufferDuration
+        : buffer;
 
     // swap the stream
     stream = createBufferStream(stream, interval);
@@ -576,7 +582,7 @@ morgan.token('response-time', function getResponseTimeToken(req, res, digits) {
 
   // calculate diff
   var ms = (res._startAt[0] - req._startAt[0]) * 1e3
-    + (res._startAt[1] - req._startAt[1]) * 1e-6;
+      + (res._startAt[1] - req._startAt[1]) * 1e-6;
 
   // return truncated value
   return ms.toFixed(digits === undefined ? 3 : digits);
@@ -619,8 +625,8 @@ morgan.token('date', function getDateToken(req, res, format) {
 
 morgan.token('status', function getStatusToken(req, res) {
   return res._header
-    ? String(res.statusCode)
-    : undefined;
+      ? String(res.statusCode)
+      : undefined;
 });
 
 /**
@@ -666,8 +672,8 @@ morgan.token('req', function getRequestToken(req, res, field) {
   var header = req.headers[field.toLowerCase()];
 
   return Array.isArray(header)
-    ? header.join(', ')
-    : header;
+      ? header.join(', ')
+      : header;
 });
 
 /**
@@ -681,30 +687,30 @@ morgan.token('res', function getResponseTime(req, res, field) {
   var header = res.getHeader(field);
 
   return Array.isArray(header)
-    ? header.join(', ')
-    : header;
+      ? header.join(', ')
+      : header;
 });
 
 /**
-  Format a date in ISO format, including UTC offset
-*/
+ Format a date in ISO format, including UTC offset
+ */
 
 function isoDate(dateObj) {
   var current_date = pad2(dateObj.date()),
-  	current_month = pad2(dateObj.month() + 1),
-  	current_year = pad2(dateObj.year()),
-  	current_hrs = pad2(dateObj.hours()),
-  	current_mins = pad2(dateObj.minutes()),
-  	current_secs = pad2(dateObj.seconds()),
-    current_millisecs = pad3(dateObj.milliseconds()),
-    timezoneOffset = dateObj.utcOffset();
+      current_month = pad2(dateObj.month() + 1),
+      current_year = pad2(dateObj.year()),
+      current_hrs = pad2(dateObj.hours()),
+      current_mins = pad2(dateObj.minutes()),
+      current_secs = pad2(dateObj.seconds()),
+      current_millisecs = pad3(dateObj.milliseconds()),
+      timezoneOffset = dateObj.utcOffset();
 
   if (timezoneOffset === 0) {
     timezoneOffset = 'Z';
   } else {
     var	offset_hrs = pad2(parseInt(Math.abs(timezoneOffset/60))),
-      offset_min = pad2(Math.abs(timezoneOffset%60)),
-      sign = timezoneOffset > 0 ? '+' : '-';
+        offset_min = pad2(Math.abs(timezoneOffset%60)),
+        sign = timezoneOffset > 0 ? '+' : '-';
 
     timezoneOffset = sign + offset_hrs + ':' + offset_min;
   }
@@ -733,8 +739,8 @@ function clfDate(dateObj) {
   var month = clfmonth[dateObj.month()];
 
   return pad2(date) + '/' + month + '/' + year
-    + ':' + pad2(hour) + ':' + pad2(mins) + ':' + pad2(secs)
-    + ` ${hoursOffsetSign}${pad3(absoluteHoursOffset)}0`;
+      + ':' + pad2(hour) + ':' + pad2(mins) + ':' + pad2(secs)
+      + ` ${hoursOffsetSign}${pad3(absoluteHoursOffset)}0`;
 }
 
 /**
@@ -817,8 +823,8 @@ function getFormatFunction(name) {
 
   // return compiled format
   return typeof fmt !== 'function'
-    ? compile(fmt)
-    : fmt;
+      ? compile(fmt)
+      : fmt;
 }
 
 /**
@@ -831,9 +837,9 @@ function getFormatFunction(name) {
 
 function getip(req) {
   return req.ip
-    || req._remoteAddress
-    || (req.connection && req.connection.remoteAddress)
-    || undefined;
+      || req._remoteAddress
+      || (req.connection && req.connection.remoteAddress)
+      || undefined;
 }
 
 /**
@@ -848,14 +854,14 @@ function pad2(num) {
   var str = String(num);
 
   return (str.length === 1 ? '0' : '')
-    + str;
+      + str;
 }
 
 function pad3(num) {
   var str = String(num);
 
   return (str.length === 1 ? '00' : str.length === 2 ? '0' : '')
-    + str;
+      + str;
 }
 
 /**
